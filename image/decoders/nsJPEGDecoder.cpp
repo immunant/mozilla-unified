@@ -4,13 +4,18 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#include <ia2.h>
+// extern "C" {
+  #include <ia2.h>
 
-INIT_RUNTIME(2); // This is the number of pkeys needed
+  INIT_RUNTIME(1);
 
-// This must be defined before including the following line
-#define IA2_COMPARTMENT 1
-#include <ia2_compartment_init.inc>
+  // This must be defined before including the following line
+  #define IA2_COMPARTMENT 1
+
+  #include <ia2_compartment_init.inc>
+
+  // __attribute__((visibility("default"))) __thread void *ia2_thread_init_stackptr;
+// }
 
 #include "ImageLogging.h"  // Must appear first.
 
