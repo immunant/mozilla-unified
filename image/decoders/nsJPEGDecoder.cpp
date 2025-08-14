@@ -4,6 +4,19 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+// extern "C" {
+  #include <ia2.h>
+
+  INIT_RUNTIME(1);
+
+  // This must be defined before including the following line
+  #define IA2_COMPARTMENT 1
+
+  #include <ia2_compartment_init.inc>
+
+  // __attribute__((visibility("default"))) __thread void *ia2_thread_init_stackptr;
+// }
+
 #include "ImageLogging.h"  // Must appear first.
 
 #include "nsJPEGDecoder.h"
@@ -62,12 +75,14 @@ static qcms_profile* GetICCProfile(struct jpeg_decompress_struct& info) {
   return profile;
 }
 
-METHODDEF(void) init_source(j_decompress_ptr jd);
-METHODDEF(boolean) fill_input_buffer(j_decompress_ptr jd);
-METHODDEF(void) skip_input_data(j_decompress_ptr jd, long num_bytes);
-METHODDEF(void) term_source(j_decompress_ptr jd);
-METHODDEF(void) my_error_exit(j_common_ptr cinfo);
-METHODDEF(void) progress_monitor(j_common_ptr info);
+extern "C" {
+  METHODDEF(void) init_source_cpp(j_decompress_ptr jd);
+  METHODDEF(boolean) fill_input_buffer_cpp(j_decompress_ptr jd);
+  METHODDEF(void) skip_input_data_cpp(j_decompress_ptr jd, long num_bytes);
+  METHODDEF(void) term_source_cpp(j_decompress_ptr jd);
+  METHODDEF(void) my_error_exit(j_common_ptr cinfo);
+  METHODDEF(void) progress_monitor(j_common_ptr info);
+}
 
 // Normal JFIF markers can't have more bytes than this.
 #define MAX_JPEG_MARKER_LENGTH (((uint32_t)1 << 16) - 1)
@@ -154,11 +169,11 @@ nsresult nsJPEGDecoder::InitInternal() {
   // Step 2: specify data source (eg, a file)
 
   // Setup callback functions.
-  mSourceMgr.init_source = init_source;
-  mSourceMgr.fill_input_buffer = fill_input_buffer;
-  mSourceMgr.skip_input_data = skip_input_data;
+  mSourceMgr.init_source = init_source_cpp;
+  mSourceMgr.fill_input_buffer = fill_input_buffer_cpp;
+  mSourceMgr.skip_input_data = skip_input_data_cpp;
   mSourceMgr.resync_to_restart = jpeg_resync_to_restart;
-  mSourceMgr.term_source = term_source;
+  mSourceMgr.term_source = term_source_cpp;
 
   mInfo.mem->max_memory_to_use = static_cast<long>(
       std::min<size_t>(SurfaceCache::MaximumCapacity(), LONG_MAX));
@@ -761,7 +776,7 @@ static void progress_monitor(j_common_ptr info) {
  * multiple buffers in an attempt to avoid unnecessary copying of input data.
  *
  * (A simpler scheme is possible: It's much easier to use only a single
- * buffer; when fill_input_buffer() is called, move any unconsumed data
+ * buffer; when fill_input_buffer_cpp() is called, move any unconsumed data
  * (beyond the current pointer/count) down to the beginning of this buffer and
  * then load new data into the remaining buffer space.  This approach requires
  * a little more data copying but is far easier to get right.)
@@ -792,11 +807,11 @@ static void progress_monitor(j_common_ptr info) {
 /* data source manager method
         Initialize source.  This is called by jpeg_read_header() before any
         data is actually read.  May leave
-        bytes_in_buffer set to 0 (in which case a fill_input_buffer() call
+        bytes_in_buffer set to 0 (in which case a fill_input_buffer_cpp() call
         will occur immediately).
 */
 METHODDEF(void)
-init_source(j_decompress_ptr jd) {}
+init_source_cpp(j_decompress_ptr jd) {}
 
 /******************************************************************************/
 /* data source manager method
@@ -810,13 +825,13 @@ init_source(j_decompress_ptr jd) {}
         A zero or negative skip count should be treated as a no-op.
 */
 METHODDEF(void)
-skip_input_data(j_decompress_ptr jd, long num_bytes) {
+skip_input_data_cpp(j_decompress_ptr jd, long num_bytes) {
   struct jpeg_source_mgr* src = jd->src;
   nsJPEGDecoder* decoder = (nsJPEGDecoder*)(jd->client_data);
 
   if (num_bytes > (long)src->bytes_in_buffer) {
     // Can't skip it all right now until we get more data from
-    // network stream. Set things up so that fill_input_buffer
+    // network stream. Set things up so that fill_input_buffer_cpp
     // will skip remaining amount.
     decoder->mBytesToSkip = (size_t)num_bytes - src->bytes_in_buffer;
     src->next_input_byte += src->bytes_in_buffer;
@@ -843,7 +858,7 @@ skip_input_data(j_decompress_ptr jd, long num_bytes) {
         suspension is desired.
 */
 METHODDEF(boolean)
-fill_input_buffer(j_decompress_ptr jd) {
+fill_input_buffer_cpp(j_decompress_ptr jd) {
   struct jpeg_source_mgr* src = jd->src;
   nsJPEGDecoder* decoder = (nsJPEGDecoder*)(jd->client_data);
 
@@ -939,7 +954,7 @@ fill_input_buffer(j_decompress_ptr jd) {
  * jpeg_abort() or jpeg_destroy().
  */
 METHODDEF(void)
-term_source(j_decompress_ptr jd) {
+term_source_cpp(j_decompress_ptr jd) {
   nsJPEGDecoder* decoder = (nsJPEGDecoder*)(jd->client_data);
 
   // This function shouldn't be called if we ran into an error we didn't

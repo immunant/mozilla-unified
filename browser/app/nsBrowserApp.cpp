@@ -98,6 +98,8 @@ __attribute__((constructor)) static void SSE2Check() {
 }
 #endif
 
+__attribute__((visibility("default"))) uint32_t ia2_dummy_global = 0xaabbccdd;
+
 #if !defined(MOZ_WIDGET_COCOA) && !defined(MOZ_WIDGET_ANDROID)
 #  define MOZ_BROWSER_CAN_BE_CONTENTPROC
 #endif
